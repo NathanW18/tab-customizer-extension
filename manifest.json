@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "AI Manual Tab Organizer",
+  "version": "3.4",
+  "description": "Groups tabs manually using stable Chrome 138 languageModel specifications.",
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "languageModel"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
