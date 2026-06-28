@@ -56,27 +56,36 @@ async function executeLocalTabSorting(sendResponse) {
       return;
     }
 
-    // 6. Initialize the local LLM execution sandbox with structural system prompts
+    // 6. Initialize the local LLM using initialPrompts (Reduces latency and prevents hanging)
     const aiSession = await aiEngine.create({
-      systemPrompt: "You are a precise tab-sorting utility. Analyze an array of tab metadata objects and categorize them into semantic clusters. You must output raw JSON strings adhering strictly to the schema requested, without adding markdown styling or prose code blocks."
+      initialPrompts: [
+        { 
+          role: 'system', 
+          content: "You are a backend JSON organizer. Categorize tab data into uppercase groups. Output ONLY a valid JSON array of objects. Never write prose or use markdown blocks like ```json." 
+        }
+      ]
     });
 
-    // 7. Request clustering prediction execution
-    const responseText = await aiSession.prompt(
-      `Categorize the following tabs into logical matching groups (e.g., Work, Social, Shopping, Finance, Dev Tools). 
-      Return an array of objects, where each object contains a 'groupName' string and a 'tabIds' array of numbers.
-      
-      Tabs Data: ${JSON.stringify(tabDataInput)}
-      
-      Output format example:
-      [{"groupName": "Shopping", "tabIds": [102, 105]}]`
-    );
+    // 7. Fire a tightly targeted prompt with explicit structural examples
+    const promptPayload = `Cluster these open tabs by topic:
+    ${JSON.stringify(tabDataInput)}
 
+    Respond exactly like this example template, with no extra text:
+    [{"groupName": "Tech", "tabIds": [1234, 5678]}]`;
+
+    const responseText = await aiSession.prompt(promptPayload);
+    
     // Explicit V8 garbage cleanup to instantly protect background GPU memory allocation
-    aiSession.destroy();
+    aiSession.destroy(); 
 
-    // 8. Parse text payload and apply modifications using Chrome's tabGroups API
-    const parsedGroups = JSON.parse(responseText.trim());
+    // 8. Robust Fallback Parser: Cleans out rogue markdown markers if the model slips up
+    let cleanText = responseText.trim();
+    if (cleanText.includes("```")) {
+      cleanText = cleanText.replace(/```json|```markdown|```/g, "").trim();
+    }
+
+    // 9. Parse text payload and apply modifications using Chrome's tabGroups API
+    const parsedGroups = JSON.parse(cleanText);
     let structuredGroupCount = 0;
     
     for (const item of parsedGroups) {
