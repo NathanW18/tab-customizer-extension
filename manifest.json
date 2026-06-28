@@ -4,8 +4,7 @@
   "version": "3.4",
   "permissions": [
     "tabs",
-    "tabGroups",
-    "aiLanguageModel"
+    "tabGroups"
   ],
   "background": {
     "service_worker": "background.js"
