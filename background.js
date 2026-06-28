@@ -7,15 +7,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 async function executeLocalTabSorting(sendResponse) {
   try {
-    // 1. Resolve the correct, modern Chrome AI namespace safely
-    const aiEngine = (typeof chrome !== 'undefined' && chrome.aiLanguageModel) 
-      ? chrome.aiLanguageModel 
-      : ((typeof chrome !== 'undefined' && chrome.languageModel) ? chrome.languageModel : null);
+    // Standardized extension hook
+    const aiEngine = (typeof chrome !== 'undefined' && chrome.languageModel) ? chrome.languageModel : null;
 
     if (!aiEngine) {
       sendResponse({ 
         success: false, 
-        error: "Chrome AI capabilities not found. Ensure your browser is fully updated and flags are enabled." 
+        error: "Namespace missing. Please make sure you have flipped the #prompt-api-for-extension flag to Enabled and restarted Chrome." 
       });
       return;
     }
