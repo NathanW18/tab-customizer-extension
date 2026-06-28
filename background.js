@@ -1,18 +1,29 @@
-
-// 1. Listen for classification requests from the UI popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "sortTabs") {
     executeLocalTabSorting(sendResponse);
-    return true; // Keeps the communication channel open for asynchronous responses
+    return true; 
   }
 });
 
 async function executeLocalTabSorting(sendResponse) {
   try {
-    // 2. Query hardware availability for Built-In AI
-    const availability = await ai.aiLanguageModel.availability();
-    if (availability === 'no') {
-      sendResponse({ success: false, error: "Built-in AI is disabled or unsupported on this device." });
+    // 1. Resolve the correct, modern Chrome AI namespace safely
+    const aiEngine = (typeof chrome !== 'undefined' && chrome.aiLanguageModel) 
+      ? chrome.aiLanguageModel 
+      : ((typeof chrome !== 'undefined' && chrome.languageModel) ? chrome.languageModel : null);
+
+    if (!aiEngine) {
+      sendResponse({ 
+        success: false, 
+        error: "Chrome AI capabilities not found. Ensure your browser is fully updated and flags are enabled." 
+      });
+      return;
+    }
+
+    // 2. Query availability using the corrected namespace
+    const availability = await aiEngine.availability();
+    if (availability === 'no' || availability === 'unavailable') {
+      sendResponse({ success: false, error: "Built-in AI model is disabled or unsupported on this device." });
       return;
     }
 
@@ -23,15 +34,17 @@ async function executeLocalTabSorting(sendResponse) {
       return;
     }
 
-    // 4. Construct a structured array payload containing only structural metadata
-    const tabDataInput = tabs.map(t => ({ id: t.id, title: t.title, url: t.url }));
+    // 4. Clean the metadata array down to just essential properties
+    const tabDataInput = tabs
+      .filter(t => t.title && t.url && !t.url.startsWith('chrome://'))
+      .map(t => ({ id: t.id, title: t.title }));
 
-    // 5. Initialize the Gemini Nano local session with clear system instructions
-    const aiSession = await ai.aiLanguageModel.create({
+    // 5. Initialize the session via the correct namespace engine
+    const aiSession = await aiEngine.create({
       systemPrompt: "You are a precise tab-sorting utility. Analyze an array of tab metadata objects and categorize them into semantic clusters. You must output raw JSON strings adhering strictly to the schema requested, without adding markdown styling or prose code blocks."
     });
 
-    // 6. Formulate structural expectations via Prompt Engineering
+    // 6. Request clustering prediction
     const responseText = await aiSession.prompt(
       `Categorize the following tabs into logical matching groups (e.g., Work, Social, Shopping, Finance, Dev Tools). 
       Return an array of objects, where each object contains a 'groupName' string and a 'tabIds' array of numbers.
@@ -42,16 +55,18 @@ async function executeLocalTabSorting(sendResponse) {
       [{"groupName": "Shopping", "tabIds": [102, 105]}]`
     );
 
-    // Clean up resources immediately after execution to prevent background leak vectors
+    // Explicit cleanup to protect background memory
     aiSession.destroy();
 
-    // 7. Parse output and apply modifications using Chrome's tabGroups API
+    // 7. Parse response and assemble groups
     const parsedGroups = JSON.parse(responseText.trim());
     
     for (const item of parsedGroups) {
       if (item.tabIds && item.tabIds.length > 0) {
         const newGroupId = await chrome.tabs.group({ tabIds: item.tabIds });
-        await chrome.tabGroups.update(newGroupId, { title: item.groupName });
+        
+        // Assign a clean name to the newly formed tab group
+        await chrome.tabGroups.update(newGroupId, { title: item.groupName.toUpperCase() });
       }
     }
 
