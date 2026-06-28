@@ -146,3 +146,22 @@ function calculateStringHash(str) {
   }
   return hash;
 }
+
+document.getElementById('sort-btn').addEventListener('click', async () => {
+  const statusDisplay = document.getElementById('status-text');
+  statusDisplay.textContent = "Analyzing context locally via Gemini Nano...";
+  
+  // This triggers the communication channel to background.js
+  chrome.runtime.sendMessage({ action: "sortTabs" }, (response) => {
+    if (chrome.runtime.lastError) {
+      statusDisplay.textContent = `Channel Error: ${chrome.runtime.lastError.message}`;
+      return;
+    }
+    
+    if (response.success) {
+      statusDisplay.textContent = `Successfully clustered active workspaces into ${response.count} groups!`;
+    } else {
+      statusDisplay.textContent = `Sorting Failed: ${response.error}`;
+    }
+  });
+});
